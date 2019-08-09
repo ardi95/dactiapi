@@ -18,7 +18,7 @@ class AuthController extends Controller
         if ($validator->fails()) {
             $data['errors'] = $validator->errors();
 
-            return response()->json($data, 404);
+            return response()->json($data, 400);
         }
         else {
             if(Auth::attempt(['email' => request('email'), 'password' => request('password')])){
@@ -27,7 +27,7 @@ class AuthController extends Controller
                 return response()->json($success, 200);
             }
             else{
-                return response()->json(['errors'=>'User not found'], 404);
+                return response()->json(['errors'=>'User not found'], 400);
             }
         }
     }
