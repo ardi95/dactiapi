@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 //     Route::post('/login','AuthController@login');
 // });
 Route::post('/login','AuthController@login');
+Route::get('/token-notfound', 'AuthController@token_notfound')->name('token-notfound');
 
 Route::group(['middleware' => 'auth:api'], function(){
     Route::get('/detail-user', 'AuthController@detail');
@@ -28,5 +29,7 @@ Route::group(['middleware' => 'auth:api'], function(){
     Route::post('/contohpost', 'AuthController@contohpost');
     Route::post('/logout','AuthController@logout');
 
-    Route::resource('/users', 'UsersController');
+    Route::group(['middleware' => 'role:admin'], function(){
+        Route::resource('/users', 'UsersController');
+    });
 });

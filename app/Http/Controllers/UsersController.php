@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\User;
 use App\Role;
+use App\RoleUser;
 use Validator;
+use Illuminate\Support\Facades\File;
 
 class UsersController extends Controller
 {
@@ -75,7 +77,6 @@ class UsersController extends Controller
                     $a++;
                 }
             }
-            $die;
 
             $error = 1;
         }
@@ -119,10 +120,10 @@ class UsersController extends Controller
         else {
             // STATUS
             if ($request->status == TRUE) {
-                $status = 1;
+                $status = '1';
             }
             else {
-                $status = 0;
+                $status = '0';
             }
             // PHOTO
             if ($request->file('photo') !== NULL) {
@@ -160,9 +161,13 @@ class UsersController extends Controller
             $user->status = $status;
             $user->save();
 
-            foreach ($request->role as $r) {
-                $role = Role::find($r);
-                $user->attachRole($role);
+            // $count_role = count($request->role);
+
+            if (!empty($request->role)) {
+                foreach ($request->role as $r) {
+                    $role = Role::find($r);
+                    $user->attachRole($role);
+                }
             }
 
             $data['status'] = 'success';
@@ -191,7 +196,15 @@ class UsersController extends Controller
      */
     public function edit($id)
     {
-        //
+        $data['user'] = User::find($id);
+
+        $role = RoleUser::where('user_id','=',$id)->get();
+        $data['role'] = array();
+        foreach ($role as $key => $r) {
+            $data['role'][$key] = $r->role_id;
+        }
+
+        return response()->json($data, 200);
     }
 
     /**
@@ -203,7 +216,138 @@ class UsersController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|unique:users,email,'.$id,
+            'name' => 'required'
+        ]);
+
+        $error = 0;
+        $a = 0;
+        $data = array();
+        $data['errors'] = [];
+
+        if ($validator->fails()) {
+            $errors = $validator->errors()->getMessages();
+
+            foreach ($errors as $value) {
+                if ($value[0] == 'The email has already been taken.') {
+                    $data['errors'][$a] = "The username has already been taken.";
+                    $a++;
+                }
+                else {
+                    $data['errors'][$a] = $value[0];
+                    $a++;
+                }
+            }
+            $error = 1;
+        }
+
+        if (trim($request->no_pegawai) != '' OR $request->no_pegawai != NULL) {
+            $validator2 = Validator::make($request->all(), [
+                'no_pegawai' => 'unique:users,no_pegawai,'.$id
+            ]);
+
+            if ($validator2->fails()) {
+                $error = 1;
+                $errors2 = $validator2->errors()->getMessages();
+
+                foreach ($errors2 as $value2) {
+                    $data['errors'][$a] = $value2[0];
+                    $a++;
+                }
+            }
+        }
+
+        if ($request->status_photo == 1) {
+            if ($request->photo != null) {
+                $validator3 = Validator::make($request->all(), [
+                    'photo' => 'mimes:png'
+                ]);
+
+                if ($validator3->fails()) {
+                    $error = 1;
+                    $errors3 = $validator3->errors()->getMessages();
+
+                    foreach ($errors3 as $value3) {
+                        $data['errors'][$a] = $value3[0];
+                        $a++;
+                    }
+                }
+            }
+        }
+
+        if ($error == 1) {
+            $data['status'] = 'error';
+            return response()->json($data, 400);
+        } else {
+
+            $user = User::find($id);
+            if ($user->photo !== NULL) {
+                $filepath = public_path() . DIRECTORY_SEPARATOR . 'profile'. DIRECTORY_SEPARATOR . $user->photo;
+
+                try {
+                    File::delete($filepath);
+                } catch (FileNotFoundException $e) {
+                    // File sudah dihapus/tidak ada
+                }
+            }
+
+            // PHOTO
+            if ($request->status_photo == 1) {
+                if ($request->file('photo') !== NULL) {
+                    $uploadFile = $request->file('photo');
+
+                    $nameFile = pathinfo($uploadFile->getClientOriginalName(), PATHINFO_FILENAME);
+                    $extensionFile = $uploadFile->getClientOriginalExtension();
+
+                    $resultNameFile = $nameFile.".".$extensionFile;
+
+                    $nameFile2 = $nameFile;
+
+                    $i = 2;
+                    while(file_exists(base_path().'/public/profile/'.$nameFile.".".$extensionFile))
+                    {
+                        $nameFile = (string)$nameFile2.$i;
+                        $resultNameFile = $nameFile.".".$extensionFile;
+                        $i++;
+                    }
+
+                    $destinationPath = base_path().'/public/profile/';
+
+                    $uploadFile->move($destinationPath, $resultNameFile);
+                }
+                else {
+                    $resultNameFile = NULL;
+                }
+            } else {
+                $resultNameFile = NULL;
+            }
+
+            $role = RoleUser::where('user_id', '=', $id);
+            $role->delete();
+
+            // echo $request->status;die();
+
+            $user->update([
+                'email' => $request->email,
+                'name' => $request->name,
+                'no_pegawai' => $request->no_pegawai,
+                'status' => $request->status,
+                'photo' => $resultNameFile
+            ]);
+
+            if (!empty($request->role)) {
+                foreach ($request->role as $r) {
+                    $role = Role::find($r);
+                    $user->attachRole($role);
+                }
+            }
+
+            $data['status'] = 'success';
+            $data['message'] = 'success edit data user';
+
+            return response()->json($data, 200);
+        }
     }
 
     /**
